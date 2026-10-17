@@ -3,7 +3,10 @@ import type LocalGPT from "./main";
 import type { LocalGPTAction } from "./interfaces";
 import { I18n } from "./i18n";
 import { waitForAI } from "@obsidian-ai-providers/sdk";
-import type { IAIProvider, IAIProvidersService } from "@obsidian-ai-providers/sdk";
+import type {
+	IAIProvider,
+	IAIProvidersService,
+} from "@obsidian-ai-providers/sdk";
 import {
 	isReasoningEffort,
 	reasoningEffortOptionsFromSources,
@@ -86,7 +89,6 @@ export function renderActionEditor({
 		reasoningModes.map((mode) => ({ mode, providerNames: [] }));
 	const knownModes = modeSources.map((source) => source.mode);
 
-
 	new Setting(container)
 		.setName(I18n.t("settings.reasoningEffort"))
 		.setDesc(I18n.t("settings.reasoningEffortDesc"))
@@ -148,11 +150,13 @@ export function renderActionEditor({
 				});
 		});
 
-
 	// ── Per-action Provider/Model override (issue #108) ──
 	const providerSetting = new Setting(container);
 	const modelSetting = new Setting(container);
-	const refreshModelOptions = (providerId: string, modelSelect: HTMLSelectElement) => {
+	const refreshModelOptions = (
+		providerId: string,
+		modelSelect: HTMLSelectElement,
+	) => {
 		const previous = actionToEdit.model ?? "";
 		modelSelect.replaceChildren();
 		const defaultOption = document.createElement("option");
@@ -213,10 +217,7 @@ export function renderActionEditor({
 					dropdown.addOptions(options);
 					dropdown.setValue(actionToEdit.providerId ?? "");
 				} catch (error) {
-					console.error(
-						"Error rendering provider override:",
-						error,
-					);
+					console.error("Error rendering provider override:", error);
 				}
 			})();
 			dropdown.onChange((value) => {
@@ -248,10 +249,7 @@ export function renderActionEditor({
 				}
 			});
 			if (actionToEdit.providerId) {
-				refreshModelOptions(
-					actionToEdit.providerId,
-					dropdown.selectEl,
-				);
+				refreshModelOptions(actionToEdit.providerId, dropdown.selectEl);
 			}
 		});
 	// ── end per-action override ──

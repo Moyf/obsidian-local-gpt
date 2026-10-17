@@ -84,7 +84,11 @@ export function resolveActionProvider(
 	actionPaletteModel: string | null,
 	actionPaletteModelProviderId: string | null,
 ): IAIProvider {
-	if (overrideModel && overrideProviderId && provider.id === overrideProviderId) {
+	if (
+		overrideModel &&
+		overrideProviderId &&
+		provider.id === overrideProviderId
+	) {
 		return { ...provider, model: overrideModel };
 	}
 	return overrideProviderModel(
