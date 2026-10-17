@@ -40,7 +40,7 @@ import { enhanceWithContext as enhanceContext } from "./contextEnhancer";
 import { extractImagesFromSelection } from "./selectionImages";
 import {
 	executeProviderRequest,
-	overrideProviderModel,
+	resolveActionProvider,
 	selectProvider,
 } from "./providerRequest";
 import { removeThinkingTags } from "./textProcessing";
@@ -151,6 +151,8 @@ export default class LocalGPT extends Plugin {
 				system: action.system,
 				replace: !!action.replace,
 				temperature: action.temperature,
+				overrideProviderId: action.providerId || null,
+				overrideModel: action.model || null,
 				selectionContextMode: "selection-or-document",
 			},
 			editor,
@@ -167,6 +169,8 @@ export default class LocalGPT extends Plugin {
 			reasoningSelection?: ReasoningSelection;
 			selectedFiles?: string[];
 			overrideProviderId?: string | null;
+			/** Per-action model override; takes precedence over the Action Palette override. */
+			overrideModel?: string | null;
 			selectionContextMode: SelectionContextMode;
 		},
 		editor: Editor,
@@ -239,9 +243,10 @@ export default class LocalGPT extends Plugin {
 				imagesInBase64.length > 0,
 				params.overrideProviderId,
 			);
-			const adjustedProvider = overrideProviderModel(
+			const adjustedProvider = resolveActionProvider(
 				provider,
 				params.overrideProviderId,
+				params.overrideModel,
 				this.actionPaletteModel,
 				this.actionPaletteModelProviderId,
 			);

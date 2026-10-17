@@ -61,6 +61,10 @@ export interface LocalGPTAction {
 	temperature?: number | null;
 	/** Missing inherits the provider setting; default omits the API parameter. */
 	reasoningEffort?: ReasoningEffort | "default";
+	/** Missing inherits the main provider configured in settings. */
+	providerId?: string;
+	/** Missing inherits the provider's configured model. */
+	model?: string;
 	system?: string;
 	replace?: boolean;
 	separator?: boolean;

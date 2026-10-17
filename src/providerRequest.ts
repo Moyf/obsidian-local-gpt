@@ -72,6 +72,29 @@ export function overrideProviderModel(
 	return provider;
 }
 
+/**
+ * Resolve the provider/model pair for an action run. A per-action model
+ * override (issue #108) wins when the action selected its own provider;
+ * otherwise the Action Palette's global override applies unchanged.
+ */
+export function resolveActionProvider(
+	provider: IAIProvider,
+	overrideProviderId: string | null | undefined,
+	overrideModel: string | null | undefined,
+	actionPaletteModel: string | null,
+	actionPaletteModelProviderId: string | null,
+): IAIProvider {
+	if (overrideModel && overrideProviderId && provider.id === overrideProviderId) {
+		return { ...provider, model: overrideModel };
+	}
+	return overrideProviderModel(
+		provider,
+		overrideProviderId,
+		actionPaletteModel,
+		actionPaletteModelProviderId,
+	);
+}
+
 function resolveRequestReasoningMode(
 	aiProviders: IAIProvidersService,
 	provider: IAIProvider,

@@ -2,6 +2,8 @@ import { Notice, Setting } from "obsidian";
 import type LocalGPT from "./main";
 import type { LocalGPTAction } from "./interfaces";
 import { I18n } from "./i18n";
+import { waitForAI } from "@obsidian-ai-providers/sdk";
+import type { IAIProvider, IAIProvidersService } from "@obsidian-ai-providers/sdk";
 import {
 	isReasoningEffort,
 	reasoningEffortOptionsFromSources,
@@ -84,6 +86,7 @@ export function renderActionEditor({
 		reasoningModes.map((mode) => ({ mode, providerNames: [] }));
 	const knownModes = modeSources.map((source) => source.mode);
 
+
 	new Setting(container)
 		.setName(I18n.t("settings.reasoningEffort"))
 		.setDesc(I18n.t("settings.reasoningEffortDesc"))
@@ -145,6 +148,113 @@ export function renderActionEditor({
 				});
 		});
 
+
+	// ── Per-action Provider/Model override (issue #108) ──
+	const providerSetting = new Setting(container);
+	const modelSetting = new Setting(container);
+	const refreshModelOptions = (providerId: string, modelSelect: HTMLSelectElement) => {
+		const previous = actionToEdit.model ?? "";
+		modelSelect.replaceChildren();
+		const defaultOption = document.createElement("option");
+		defaultOption.value = "";
+		defaultOption.textContent = I18n.t("settings.actionModelDefault");
+		modelSelect.appendChild(defaultOption);
+		if (!providerId) {
+			delete actionToEdit.model;
+			return;
+		}
+		void (async () => {
+			try {
+				const aiRequestWaiter = await waitForAI();
+				const aiProviders: IAIProvidersService =
+					await aiRequestWaiter.promise;
+				const provider = aiProviders.providers.find(
+					(p: IAIProvider) => p.id === providerId,
+				);
+				if (!provider) return;
+				const models: string[] =
+					provider.availableModels ||
+					(await aiProviders.fetchModels(provider));
+				for (const model of models) {
+					const option = document.createElement("option");
+					option.value = model;
+					option.textContent = model;
+					modelSelect.appendChild(option);
+				}
+				if (previous && !models.includes(previous)) {
+					const option = document.createElement("option");
+					option.value = previous;
+					option.textContent = `${previous} (${I18n.t("settings.actionModelUnavailable")})`;
+					modelSelect.appendChild(option);
+				}
+				modelSelect.value = previous;
+			} catch (error) {
+				console.error("Error fetching models:", error);
+			}
+		})();
+	};
+
+	providerSetting
+		.setName(I18n.t("settings.actionProvider"))
+		.setDesc(I18n.t("settings.actionProviderDesc"))
+		.addDropdown((dropdown) => {
+			dropdown.addOption("", I18n.t("settings.actionProviderInherit"));
+			void (async () => {
+				try {
+					const aiRequestWaiter = await waitForAI();
+					const aiProviders: IAIProvidersService =
+						await aiRequestWaiter.promise;
+					const options: Record<string, string> = {};
+					for (const provider of aiProviders.providers) {
+						options[provider.id] = provider.model
+							? [provider.name, provider.model].join(" ~ ")
+							: provider.name;
+					}
+					dropdown.addOptions(options);
+					dropdown.setValue(actionToEdit.providerId ?? "");
+				} catch (error) {
+					console.error(
+						"Error rendering provider override:",
+						error,
+					);
+				}
+			})();
+			dropdown.onChange((value) => {
+				if (value) {
+					actionToEdit.providerId = value;
+				} else {
+					delete actionToEdit.providerId;
+					delete actionToEdit.model;
+				}
+				refreshModelOptions(
+					value,
+					modelSetting.controlEl.querySelector(
+						"select",
+					) as HTMLSelectElement,
+				);
+			});
+		});
+
+	modelSetting
+		.setName(I18n.t("settings.actionModel"))
+		.setDesc(I18n.t("settings.actionModelDesc"))
+		.addDropdown((dropdown) => {
+			dropdown.addOption("", I18n.t("settings.actionModelDefault"));
+			dropdown.onChange((value) => {
+				if (value) {
+					actionToEdit.model = value;
+				} else {
+					delete actionToEdit.model;
+				}
+			});
+			if (actionToEdit.providerId) {
+				refreshModelOptions(
+					actionToEdit.providerId,
+					dropdown.selectEl,
+				);
+			}
+		});
+	// ── end per-action override ──
 	const actionButtonsRow = new Setting(container).setName("");
 
 	if (isExistingAction) {
