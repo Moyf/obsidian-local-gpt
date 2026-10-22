@@ -13,6 +13,7 @@ import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import type { DecorationSet } from "@codemirror/view";
 import { I18n } from "../i18n";
 import ActionPalette from "./ActionPalette.svelte";
+import { endHoldingPromptFocus } from "./actionPaletteDom";
 
 export interface ActionPaletteOptions {
 	providerDetails?: ProviderLabelParts;
@@ -23,8 +24,14 @@ export interface ActionPaletteOptions {
 		selectedFiles?: string[],
 		systemPrompt?: string,
 		reasoningSelection?: ReasoningSelection,
+		replaceSelection?: boolean,
 	) => void;
 	onCancel?: () => void;
+	/** Show the replace-selection toggle (palette opened over a selection). */
+	canReplaceSelection?: boolean;
+	/** Initial state of the replace-selection toggle. */
+	replaceSelection?: boolean;
+	onReplaceSelectionChange?: (replaceSelection: boolean) => void;
 	placeholder?: string;
 	/**
 	 * Optional label showing currently selected provider/model
@@ -116,6 +123,14 @@ class SvelteActionPaletteWidget extends WidgetType {
 		return true;
 	}
 
+	/** Stop the prompt from reclaiming focus (palette is about to close). */
+	releasePromptFocus(): void {
+		const input = this.container?.querySelector<HTMLElement>(
+			".local-gpt-action-palette",
+		);
+		endHoldingPromptFocus(input ?? null);
+	}
+
 	toDOM(_view: EditorView): HTMLElement {
 		this.container = document.createElement("div");
 		this.container.addClass("local-gpt-action-palette-container");
@@ -145,17 +160,22 @@ class SvelteActionPaletteWidget extends WidgetType {
 				selectedSystemPromptId: this.options.selectedSystemPromptId,
 				onSystemPromptChange: this.options.onSystemPromptChange,
 				initialSelectedFiles: this.options.initialSelectedFiles,
+				canReplaceSelection: this.options.canReplaceSelection === true,
+				replaceSelection: this.options.replaceSelection === true,
+				onReplaceSelectionChange: this.options.onReplaceSelectionChange,
 				onSubmit: (event: {
 					text: string;
 					selectedFiles: string[];
 					systemPrompt?: string;
 					reasoningSelection?: ReasoningSelection;
+					replaceSelection?: boolean;
 				}) => {
 					this.options.onSubmit?.(
 						event.text,
 						event.selectedFiles,
 						event.systemPrompt,
 						event.reasoningSelection,
+						event.replaceSelection,
 					);
 				},
 				onCancel: () => {
@@ -336,25 +356,30 @@ export function showActionPalette(
 }
 
 export function hideActionPalette(view: EditorView) {
-	// Restore previous selection/caret (mapped across edits). Read from field.
 	const state = view.state.field(actionPaletteStateField, false);
-	if (state) {
-		if (
-			state.previousSelectionRanges &&
-			state.previousSelectionRanges.length
-		) {
-			const selection = EditorSelection.create(
-				state.previousSelectionRanges.map((r) =>
-					EditorSelection.range(r.from, r.to),
-				),
-			);
-			view.dispatch({ selection });
-			view.focus();
-		} else if (state.previousCursor !== null) {
-			view.dispatch({ selection: { anchor: state.previousCursor } });
-			view.focus();
-		}
+	// Release the prompt's focus hold first: otherwise view.focus() is
+	// reclaimed by the still-mounted palette input (its focusout handler),
+	// which is then removed while focused. Focus falls to <body>, the DOM
+	// selection collapses to the widget position, and CM later adopts it —
+	// the selection is lost and Ctrl+Z goes nowhere until the user clicks.
+	state?.widget?.releasePromptFocus();
+
+	// Remove the palette and restore the previous selection/caret (mapped
+	// across edits) in one transaction, then give the editor focus.
+	let selection: EditorSelection | undefined;
+	if (state?.previousSelectionRanges?.length) {
+		selection = EditorSelection.create(
+			state.previousSelectionRanges.map((r) =>
+				EditorSelection.range(r.from, r.to),
+			),
+		);
+	} else if (state && state.previousCursor !== null) {
+		selection = EditorSelection.single(state.previousCursor);
 	}
 
-	view.dispatch({ effects: HideActionPaletteEffect.of(null) });
+	view.dispatch({
+		...(selection ? { selection } : {}),
+		effects: HideActionPaletteEffect.of(null),
+	});
+	if (selection) view.focus();
 }
